@@ -1,44 +1,9 @@
-// rTorrent - BitTorrent client
-// Copyright (C) 2005-2011, Jari Sundell
-//
-// This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; either version 2 of the License, or
-// (at your option) any later version.
-// 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-// 
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software
-// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-//
-// In addition, as a special exception, the copyright holders give
-// permission to link the code of portions of this program with the
-// OpenSSL library under certain conditions as described in each
-// individual source file, and distribute linked combinations
-// including the two.
-//
-// You must obey the GNU General Public License in all respects for
-// all of the code used other than OpenSSL.  If you modify file(s)
-// with this exception, you may extend this exception to your version
-// of the file(s), but you are not obligated to do so.  If you do not
-// wish to do so, delete this exception statement from your version.
-// If you delete this exception statement from all source files in the
-// program, then also delete it here.
-//
-// Contact:  Jari Sundell <jaris@ifi.uio.no>
-//
-//           Skomakerveien 33
-//           3185 Skoppum, NORWAY
-
 #include "config.h"
 
 #include <torrent/download/resource_manager.h>
 #include <torrent/download/choke_group.h>
 #include <torrent/download/choke_queue.h>
+#include <torrent/utils/log.h>
 #include <torrent/utils/option_strings.h>
 
 #include "ui/root.h"
@@ -51,6 +16,9 @@
 
 // For cg_d_group.
 #include "core/download.h"
+
+#define LT_LOG_SUBSYSTEM(log_fmt, ...)                                  \
+  lt_log_print_subsystem(torrent::LOG_TORRENT_INFO, "choke_queue", log_fmt, __VA_ARGS__);
 
 // A hack to allow testing of the new choke_group API without the
 // working parts present.
@@ -122,6 +90,22 @@ apply_cg_insert(const std::string& arg) {
   return torrent::Object();
 }
 
+torrent::Object
+apply_cg_all_update_balance(bool is_up) {
+  LT_LOG_SUBSYSTEM("apply update balance: resource_manager is_up:%i", (int)is_up);
+
+  for (torrent::ResourceManager::group_iterator
+         itr = torrent::resource_manager()->group_begin(),
+         last = torrent::resource_manager()->group_end(); itr != last; itr++) {
+    if (is_up)
+      itr->up_queue()->balance();
+    else
+      itr->down_queue()->balance();
+  }
+
+  return torrent::Object();
+}
+
 //
 // The hacked version:
 //
@@ -182,6 +166,11 @@ apply_cg_list() {
   return torrent::Object::from_list(result);
 }
 
+int
+cg_get_can_unchoke(torrent::choke_queue* cq) {
+  return cq->max_unchoked_signed() - (int)cq->size_unchoked();
+}
+
 torrent::Object
 apply_cg_insert(const std::string& arg) {
   int64_t dummy;
@@ -212,6 +201,20 @@ apply_cg_index_of(const std::string& arg) {
     throw torrent::input_error("Choke group not found.");
 
   return std::distance(cg_list_hack.begin(), itr);
+}
+
+torrent::Object
+apply_cg_all_update_balance(bool is_up) {
+  LT_LOG_SUBSYSTEM("apply update balance: hack is_up:%i", (int)is_up);
+
+  for (auto itr : cg_list_hack) {
+    if (is_up)
+      itr->up_queue()->balance();
+    else
+      itr->down_queue()->balance();
+  }
+
+  return torrent::Object();
 }
 
 //
@@ -264,8 +267,8 @@ apply_cg_tracker_mode_set(const torrent::Object::list_type& args) {
   return torrent::Object();
 }
 
-#define CG_GROUP_AT()          tr1::bind(&cg_get_group, tr1::placeholders::_2)
-#define CHOKE_GROUP(direction) tr1::bind(direction, CG_GROUP_AT())
+#define CG_GROUP_AT()          std::bind(&cg_get_group, std::placeholders::_2)
+#define CHOKE_GROUP(direction) std::bind(direction, CG_GROUP_AT())
 
 /*
 
@@ -335,55 +338,52 @@ options.
 
 void
 initialize_command_groups() {
-  // Move somewhere else?
-  CMD2_ANY         ("strings.choke_heuristics",          tr1::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS));
-  CMD2_ANY         ("strings.choke_heuristics.upload",   tr1::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS_UPLOAD));
-  CMD2_ANY         ("strings.choke_heuristics.download", tr1::bind(&torrent::option_list_strings, torrent::OPTION_CHOKE_HEURISTICS_DOWNLOAD));
-  CMD2_ANY         ("strings.tracker_mode",              tr1::bind(&torrent::option_list_strings, torrent::OPTION_TRACKER_MODE));
-
-  CMD2_ANY         ("choke_group.list",                tr1::bind(&apply_cg_list));
-  CMD2_ANY_STRING  ("choke_group.insert",              tr1::bind(&apply_cg_insert, tr1::placeholders::_2));
-
+  CMD2_ANY         ("choke_group.list",                std::bind(&apply_cg_list));
+  CMD2_ANY_STRING  ("choke_group.insert",              std::bind(&apply_cg_insert, std::placeholders::_2));
+		
 #if USE_CHOKE_GROUP
-  CMD2_ANY         ("choke_group.size",                tr1::bind(&torrent::ResourceManager::group_size, torrent::resource_manager()));
-  CMD2_ANY_STRING  ("choke_group.index_of",            tr1::bind(&torrent::ResourceManager::group_index_of, torrent::resource_manager(), tr1::placeholders::_2));
+  CMD2_ANY         ("choke_group.size",                std::bind(&torrent::ResourceManager::group_size, torrent::resource_manager()));
+  CMD2_ANY_STRING  ("choke_group.index_of",            std::bind(&torrent::ResourceManager::group_index_of, torrent::resource_manager(), std::placeholders::_2));
 #else
   apply_cg_insert("default");
 
-  CMD2_ANY         ("choke_group.size",                tr1::bind(&std::vector<torrent::choke_group*>::size, cg_list_hack));
-  CMD2_ANY_STRING  ("choke_group.index_of",            tr1::bind(&apply_cg_index_of, tr1::placeholders::_2));
+  CMD2_ANY         ("choke_group.size",                std::bind(&std::vector<torrent::choke_group*>::size, cg_list_hack));
+  CMD2_ANY_STRING  ("choke_group.index_of",            std::bind(&apply_cg_index_of, std::placeholders::_2));
 #endif
 
   // Commands specific for a group. Supports as the first argument the
   // name, the index or a negative index.
-  CMD2_ANY         ("choke_group.general.size",        tr1::bind(&torrent::choke_group::size, CG_GROUP_AT()));
+  CMD2_ANY         ("choke_group.general.size",        std::bind(&torrent::choke_group::size, CG_GROUP_AT()));
 
-  CMD2_ANY         ("choke_group.tracker.mode",        tr1::bind(&torrent::option_as_string, torrent::OPTION_TRACKER_MODE,
-                                                                 tr1::bind(&torrent::choke_group::tracker_mode, CG_GROUP_AT())));
-  CMD2_ANY_LIST    ("choke_group.tracker.mode.set",    tr1::bind(&apply_cg_tracker_mode_set, tr1::placeholders::_2));
+  CMD2_ANY         ("choke_group.tracker.mode",        std::bind(&torrent::option_as_string, torrent::OPTION_TRACKER_MODE,
+                                                                 std::bind(&torrent::choke_group::tracker_mode, CG_GROUP_AT())));
+  CMD2_ANY_LIST    ("choke_group.tracker.mode.set",    std::bind(&apply_cg_tracker_mode_set, std::placeholders::_2));
 
-  CMD2_ANY         ("choke_group.up.rate",             tr1::bind(&torrent::choke_group::up_rate, CG_GROUP_AT()));
-  CMD2_ANY         ("choke_group.down.rate",           tr1::bind(&torrent::choke_group::down_rate, CG_GROUP_AT()));
+  CMD2_ANY         ("choke_group.all.up.update_balance",   std::bind(&apply_cg_all_update_balance, true));
+  CMD2_ANY         ("choke_group.all.down.update_balance", std::bind(&apply_cg_all_update_balance, false));
 
-  CMD2_ANY         ("choke_group.up.max.unlimited",    tr1::bind(&torrent::choke_queue::is_unlimited, CHOKE_GROUP(&torrent::choke_group::up_queue)));
-  CMD2_ANY         ("choke_group.up.max",              tr1::bind(&torrent::choke_queue::max_unchoked_signed, CHOKE_GROUP(&torrent::choke_group::up_queue)));
-  CMD2_ANY_LIST    ("choke_group.up.max.set",          tr1::bind(&apply_cg_max_set, tr1::placeholders::_2, true));
+  CMD2_ANY         ("choke_group.up.rate",             std::bind(&torrent::choke_group::up_rate, CG_GROUP_AT()));
+  CMD2_ANY         ("choke_group.down.rate",           std::bind(&torrent::choke_group::down_rate, CG_GROUP_AT()));
 
-  CMD2_ANY         ("choke_group.up.total",            tr1::bind(&torrent::choke_queue::size_total, CHOKE_GROUP(&torrent::choke_group::up_queue)));
-  CMD2_ANY         ("choke_group.up.queued",           tr1::bind(&torrent::choke_queue::size_queued, CHOKE_GROUP(&torrent::choke_group::up_queue)));
-  CMD2_ANY         ("choke_group.up.unchoked",         tr1::bind(&torrent::choke_queue::size_unchoked, CHOKE_GROUP(&torrent::choke_group::up_queue)));
-  CMD2_ANY         ("choke_group.up.heuristics",       tr1::bind(&torrent::option_as_string, torrent::OPTION_CHOKE_HEURISTICS,
-                                                                 tr1::bind(&torrent::choke_queue::heuristics, CHOKE_GROUP(&torrent::choke_group::up_queue))));
-  CMD2_ANY_LIST    ("choke_group.up.heuristics.set",   tr1::bind(&apply_cg_heuristics_set, tr1::placeholders::_2, true));
+  CMD2_ANY         ("choke_group.up.max.unlimited",    std::bind(&torrent::choke_queue::is_unlimited, CHOKE_GROUP(&torrent::choke_group::up_queue)));
+  CMD2_ANY         ("choke_group.up.max",              std::bind(&torrent::choke_queue::max_unchoked_signed, CHOKE_GROUP(&torrent::choke_group::up_queue)));
+  CMD2_ANY_LIST    ("choke_group.up.max.set",          std::bind(&apply_cg_max_set, std::placeholders::_2, true));
 
-  CMD2_ANY         ("choke_group.down.max.unlimited",  tr1::bind(&torrent::choke_queue::is_unlimited, CHOKE_GROUP(&torrent::choke_group::down_queue)));
-  CMD2_ANY         ("choke_group.down.max",            tr1::bind(&torrent::choke_queue::max_unchoked_signed, CHOKE_GROUP(&torrent::choke_group::down_queue)));
-  CMD2_ANY_LIST    ("choke_group.down.max.set",        tr1::bind(&apply_cg_max_set, tr1::placeholders::_2, false));
+  CMD2_ANY         ("choke_group.up.total",            std::bind(&torrent::choke_queue::size_total, CHOKE_GROUP(&torrent::choke_group::up_queue)));
+  CMD2_ANY         ("choke_group.up.queued",           std::bind(&torrent::choke_queue::size_queued, CHOKE_GROUP(&torrent::choke_group::up_queue)));
+  CMD2_ANY         ("choke_group.up.unchoked",         std::bind(&torrent::choke_queue::size_unchoked, CHOKE_GROUP(&torrent::choke_group::up_queue)));
+  CMD2_ANY         ("choke_group.up.heuristics",       std::bind(&torrent::option_as_string, torrent::OPTION_CHOKE_HEURISTICS,
+                                                                 std::bind(&torrent::choke_queue::heuristics, CHOKE_GROUP(&torrent::choke_group::up_queue))));
+  CMD2_ANY_LIST    ("choke_group.up.heuristics.set",   std::bind(&apply_cg_heuristics_set, std::placeholders::_2, true));
 
-  CMD2_ANY         ("choke_group.down.total",          tr1::bind(&torrent::choke_queue::size_total, CHOKE_GROUP(&torrent::choke_group::down_queue)));
-  CMD2_ANY         ("choke_group.down.queued",         tr1::bind(&torrent::choke_queue::size_queued, CHOKE_GROUP(&torrent::choke_group::down_queue)));
-  CMD2_ANY         ("choke_group.down.unchoked",       tr1::bind(&torrent::choke_queue::size_unchoked, CHOKE_GROUP(&torrent::choke_group::down_queue)));
-  CMD2_ANY         ("choke_group.down.heuristics",     tr1::bind(&torrent::option_as_string, torrent::OPTION_CHOKE_HEURISTICS,
-                                                                 tr1::bind(&torrent::choke_queue::heuristics, CHOKE_GROUP(&torrent::choke_group::down_queue))));
-  CMD2_ANY_LIST    ("choke_group.down.heuristics.set", tr1::bind(&apply_cg_heuristics_set, tr1::placeholders::_2, false));
+  CMD2_ANY         ("choke_group.down.max.unlimited",  std::bind(&torrent::choke_queue::is_unlimited, CHOKE_GROUP(&torrent::choke_group::down_queue)));
+  CMD2_ANY         ("choke_group.down.max",            std::bind(&torrent::choke_queue::max_unchoked_signed, CHOKE_GROUP(&torrent::choke_group::down_queue)));
+  CMD2_ANY_LIST    ("choke_group.down.max.set",        std::bind(&apply_cg_max_set, std::placeholders::_2, false));
+
+  CMD2_ANY         ("choke_group.down.total",          std::bind(&torrent::choke_queue::size_total, CHOKE_GROUP(&torrent::choke_group::down_queue)));
+  CMD2_ANY         ("choke_group.down.queued",         std::bind(&torrent::choke_queue::size_queued, CHOKE_GROUP(&torrent::choke_group::down_queue)));
+  CMD2_ANY         ("choke_group.down.unchoked",       std::bind(&torrent::choke_queue::size_unchoked, CHOKE_GROUP(&torrent::choke_group::down_queue)));
+  CMD2_ANY         ("choke_group.down.heuristics",     std::bind(&torrent::option_as_string, torrent::OPTION_CHOKE_HEURISTICS,
+                                                                 std::bind(&torrent::choke_queue::heuristics, CHOKE_GROUP(&torrent::choke_group::down_queue))));
+  CMD2_ANY_LIST    ("choke_group.down.heuristics.set", std::bind(&apply_cg_heuristics_set, std::placeholders::_2, false));
 }

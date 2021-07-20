@@ -38,10 +38,11 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <stdexcept>
+
 #include <rak/path.h>
-#include <tr1/functional>
 #include <torrent/utils/log.h>
 #include <torrent/utils/resume.h>
 #include <torrent/object.h>
@@ -107,8 +108,8 @@ DownloadFactory::DownloadFactory(Manager* m) :
   m_printLog(true),
   m_isFile(false) {
 
-  m_taskLoad.slot() = std::tr1::bind(&DownloadFactory::receive_load, this);
-  m_taskCommit.slot() = std::tr1::bind(&DownloadFactory::receive_commit, this);
+  m_taskLoad.slot() = std::bind(&DownloadFactory::receive_load, this);
+  m_taskCommit.slot() = std::bind(&DownloadFactory::receive_commit, this);
 
   // m_variables["connection_leech"] = rpc::call_command("protocol.connection.leech");
   // m_variables["connection_seed"]  = rpc::call_command("protocol.connection.seed");
@@ -158,8 +159,8 @@ DownloadFactory::receive_load() {
     m_stream = new std::stringstream;
     HttpQueue::iterator itr = m_manager->http_queue()->insert(m_uri, m_stream);
 
-    (*itr)->signal_done().push_front(std::tr1::bind(&DownloadFactory::receive_loaded, this));
-    (*itr)->signal_failed().push_front(std::tr1::bind(&DownloadFactory::receive_failed, this, std::tr1::placeholders::_1));
+    (*itr)->signal_done().push_front(std::bind(&DownloadFactory::receive_loaded, this));
+    (*itr)->signal_failed().push_front(std::bind(&DownloadFactory::receive_failed, this, std::placeholders::_1));
 
     m_variables["tied_to_file"] = (int64_t)false;
 
@@ -417,6 +418,9 @@ DownloadFactory::initialize_rtorrent(Download* download, torrent::Object* rtorre
 
   if (rtorrent->has_key_value("total_uploaded"))
     download->info()->mutable_up_rate()->set_total(rtorrent->get_key_value("total_uploaded"));
+
+  if (rtorrent->has_key_value("total_downloaded"))
+    download->info()->mutable_down_rate()->set_total(rtorrent->get_key_value("total_downloaded"));
 
   if (rtorrent->has_key_value("chunks_done") && rtorrent->has_key_value("chunks_wanted"))
     download->download()->set_chunks_done(rtorrent->get_key_value("chunks_done"), rtorrent->get_key_value("chunks_wanted"));

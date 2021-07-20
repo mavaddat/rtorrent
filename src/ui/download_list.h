@@ -71,7 +71,7 @@ public:
   typedef display::WindowLog                       WLog;
   typedef display::WindowLogComplete               WLogComplete;
 
-  typedef std::tr1::function<void (const std::string&)> slot_string;
+  typedef std::function<void (const std::string&)> slot_string;
 
   typedef enum {
     DISPLAY_DOWNLOAD,
@@ -86,7 +86,9 @@ public:
     INPUT_LOAD_DEFAULT,
     INPUT_LOAD_MODIFIED,
     INPUT_CHANGE_DIRECTORY,
-    INPUT_COMMAND
+    INPUT_COMMAND,
+    INPUT_FILTER,
+    INPUT_EOI
   } Input;
 
   DownloadList();

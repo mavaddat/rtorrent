@@ -21,9 +21,9 @@ AC_DEFUN([TORRENT_CHECK_XFS], [
 
 AC_DEFUN([TORRENT_WITHOUT_XFS], [
   AC_ARG_WITH(xfs,
-    [  --without-xfs           Do not check for XFS filesystem support],
+    AC_HELP_STRING([--without-xfs], [do not check for XFS filesystem support]),
     [
-      if test "$withval" = "yes"; then
+       if test "$withval" = "yes"; then
         TORRENT_CHECK_XFS
       fi
     ], [
@@ -34,7 +34,7 @@ AC_DEFUN([TORRENT_WITHOUT_XFS], [
 
 AC_DEFUN([TORRENT_WITH_XFS], [
   AC_ARG_WITH(xfs,
-    [  --with-xfs           Check for XFS filesystem support],
+    AC_HELP_STRING([--with-xfs], [check for XFS filesystem support]),
     [
       if test "$withval" = "yes"; then
         TORRENT_CHECK_XFS
@@ -63,7 +63,7 @@ AC_DEFUN([TORRENT_CHECK_EPOLL], [
 
 AC_DEFUN([TORRENT_WITHOUT_EPOLL], [
   AC_ARG_WITH(epoll,
-    [  --without-epoll         Do not check for epoll support.],
+    AC_HELP_STRING([--without-epoll], [do not check for epoll support]),
     [
       if test "$withval" = "yes"; then
         TORRENT_CHECK_EPOLL
@@ -88,6 +88,7 @@ AC_DEFUN([TORRENT_CHECK_KQUEUE], [
     [
       AC_DEFINE(USE_KQUEUE, 1, Use kqueue.)
       AC_MSG_RESULT(yes)
+      TORRENT_CHECK_KQUEUE_SOCKET_ONLY
     ], [
       AC_MSG_RESULT(no)
     ])
@@ -96,7 +97,7 @@ AC_DEFUN([TORRENT_CHECK_KQUEUE], [
 AC_DEFUN([TORRENT_CHECK_KQUEUE_SOCKET_ONLY], [
   AC_MSG_CHECKING(whether kqueue supports pipes and ptys)
 
-  AC_RUN_IFELSE([AC_LANG_SOURCE([
+  AC_LINK_IFELSE([AC_LANG_SOURCE([
       #include <fcntl.h>
       #include <stdlib.h>
       #include <unistd.h>
@@ -133,11 +134,10 @@ AC_DEFUN([TORRENT_CHECK_KQUEUE_SOCKET_ONLY], [
 
 AC_DEFUN([TORRENT_WITH_KQUEUE], [
   AC_ARG_WITH(kqueue,
-    [  --with-kqueue           enable kqueue. [[default=no]]],
+    AC_HELP_STRING([--with-kqueue], [enable kqueue [[default=no]]]),
     [
         if test "$withval" = "yes"; then
           TORRENT_CHECK_KQUEUE
-          TORRENT_CHECK_KQUEUE_SOCKET_ONLY
         fi
     ])
 ])
@@ -145,23 +145,20 @@ AC_DEFUN([TORRENT_WITH_KQUEUE], [
 
 AC_DEFUN([TORRENT_WITHOUT_KQUEUE], [
   AC_ARG_WITH(kqueue,
-    [  --without-kqueue         Do not check for kqueue support.],
+    AC_HELP_STRING([--without-kqueue], [do not check for kqueue support]),
     [
       if test "$withval" = "yes"; then
         TORRENT_CHECK_KQUEUE
-        TORRENT_CHECK_KQUEUE_SOCKET_ONLY
       fi
     ], [
         TORRENT_CHECK_KQUEUE
-        TORRENT_CHECK_KQUEUE_SOCKET_ONLY
     ])
 ])
 
 
 AC_DEFUN([TORRENT_WITHOUT_VARIABLE_FDSET], [
   AC_ARG_WITH(variable-fdset,
-
-    [  --without-variable-fdset       do not use non-portable variable sized fd_set's.],
+    AC_HELP_STRING([--without-variable-fdset], [do not use non-portable variable sized fd_set's]),
     [
       if test "$withval" = "yes"; then
         AC_DEFINE(USE_VARIABLE_FDSET, 1, defined when we allow the use of fd_set's of any size)
@@ -175,8 +172,8 @@ AC_DEFUN([TORRENT_WITHOUT_VARIABLE_FDSET], [
 AC_DEFUN([TORRENT_CHECK_FALLOCATE], [
   AC_MSG_CHECKING(for fallocate)
 
-  AC_TRY_LINK([#include <fcntl.h>
-               #include <linux/falloc.h>
+  AC_TRY_LINK([#define _GNU_SOURCE
+               #include <fcntl.h>
               ],[ fallocate(0, FALLOC_FL_KEEP_SIZE, 0, 0); return 0;
               ],
     [
@@ -205,7 +202,7 @@ AC_DEFUN([TORRENT_CHECK_POSIX_FALLOCATE], [
 
 AC_DEFUN([TORRENT_WITH_POSIX_FALLOCATE], [
   AC_ARG_WITH(posix-fallocate,
-    [  --with-posix-fallocate  Check for and use posix_fallocate to allocate files.],
+    AC_HELP_STRING([--with-posix-fallocate], [check for and use posix_fallocate to allocate files]),
     [
       if test "$withval" = "yes"; then
         TORRENT_CHECK_POSIX_FALLOCATE
@@ -299,7 +296,7 @@ AC_DEFUN([TORRENT_DISABLED_STATFS], [
 
 AC_DEFUN([TORRENT_WITHOUT_STATVFS], [
   AC_ARG_WITH(statvfs,
-    [  --without-statvfs       Don't try to use statvfs to find free diskspace.],
+    AC_HELP_STRING([--without-statvfs], [don't try to use statvfs to find free diskspace]),
     [
       if test "$withval" = "yes"; then
         TORRENT_CHECK_STATVFS
@@ -314,7 +311,7 @@ AC_DEFUN([TORRENT_WITHOUT_STATVFS], [
 
 AC_DEFUN([TORRENT_WITHOUT_STATFS], [
   AC_ARG_WITH(statfs,
-    [  --without-statfs        Don't try to use statfs to find free diskspace.],
+    AC_HELP_STRING([--without-statfs], [don't try to use statfs to find free diskspace]),
     [
       if test "$have_stat_vfs" = "no"; then
         if test "$withval" = "yes"; then
@@ -336,7 +333,7 @@ AC_DEFUN([TORRENT_WITHOUT_STATFS], [
 
 AC_DEFUN([TORRENT_WITH_ADDRESS_SPACE], [
   AC_ARG_WITH(address-space,
-    AC_HELP_STRING([--with-address-space=MB], [Change the default address space size, default 1024 MB.]),
+    AC_HELP_STRING([--with-address-space=MB], [change the default address space size [[default=1024mb]]]),
     [
       if test ! -z $withval -a "$withval" != "yes" -a "$withval" != "no"; then
         AC_DEFINE_UNQUOTED(DEFAULT_ADDRESS_SPACE_SIZE, [$withval])
@@ -355,54 +352,9 @@ AC_DEFUN([TORRENT_WITH_ADDRESS_SPACE], [
     ])
 ])
 
-AC_DEFUN([TORRENT_CHECK_TR1], [
-  AC_LANG_PUSH(C++)
-  AC_MSG_CHECKING(for TR1 support)
-
-  AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-      #include <tr1/unordered_map>
-      class Foo;
-      typedef std::tr1::unordered_map<Foo*, int> Bar;
-      ])],
-    [
-      AC_MSG_RESULT(yes)
-      AC_DEFINE(HAVE_TR1, 1, Define to 1 if your C++ library supports the extensions from Technical Report 1)
-    ],
-    [
-      AC_MSG_RESULT(no)
-    ]
-  )
-
-  AC_LANG_POP(C++)
-])
-
-AC_DEFUN([TORRENT_CHECK_CXX11], [
-  AC_LANG_PUSH(C++)
-  AC_MSG_CHECKING(for C++11 support)
-
-  AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-      #include <functional>
-      #include <unordered_map>
-      class Foo;
-      typedef std::unordered_map<Foo*, int> Bar;
-
-      union test { Bar b1; };
-      ])],
-    [
-      AC_MSG_RESULT(yes)
-      AC_DEFINE(HAVE_CXX11, 1, Define to 1 if your C++ compiler has support for C++11.)
-    ],
-    [
-      AC_MSG_RESULT(no)
-    ]
-  )
-
-  AC_LANG_POP(C++)
-])
-
 AC_DEFUN([TORRENT_WITH_FASTCGI], [
   AC_ARG_WITH(fastcgi,
-    [  --with-fastcgi=PATH      Enable FastCGI RPC support. (DO NOT USE)],
+    AC_HELP_STRING([--with-fastcgi=PATH], [enable FastCGI RPC support (DO NOT USE)]),
     [
       AC_MSG_CHECKING([for FastCGI (DO NOT USE)])
 
@@ -451,7 +403,7 @@ AC_DEFUN([TORRENT_WITH_XMLRPC_C], [
   AC_MSG_CHECKING(for XMLRPC-C)
 
   AC_ARG_WITH(xmlrpc-c,
-  [  --with-xmlrpc-c=PATH     Enable XMLRPC-C support.],
+    AC_HELP_STRING([--with-xmlrpc-c=PATH], [enable XMLRPC-C support]),
   [
     if test "$withval" = "no"; then
       AC_MSG_RESULT(no)
@@ -507,4 +459,52 @@ AC_DEFUN([TORRENT_WITH_INOTIFY], [
   )
 
   AC_LANG_POP(C++)
+])
+
+AC_DEFUN([TORRENT_CHECK_PTHREAD_SETNAME_NP], [
+  AC_CHECK_HEADERS(pthread.h)
+
+  AC_MSG_CHECKING(for pthread_setname_np type)
+
+  AC_TRY_LINK([
+    #include <pthread.h>
+    #include <sys/types.h>
+  ],[
+    pthread_t t;
+    pthread_setname_np(t, "foo");
+  ],[
+    AC_DEFINE(HAS_PTHREAD_SETNAME_NP_GENERIC, 1, The function to set pthread name has a pthread_t argumet.)
+    AC_MSG_RESULT(generic)
+  ],[
+    AC_TRY_LINK([
+      #include <pthread.h>
+      #include <sys/types.h>
+    ],[
+      pthread_t t;
+      pthread_setname_np("foo");
+    ],[
+      AC_DEFINE(HAS_PTHREAD_SETNAME_NP_DARWIN, 1, The function to set pthread name has no pthread argument.)
+      AC_MSG_RESULT(darwin)
+    ],[
+      AC_MSG_RESULT(no)
+    ])
+  ])
+])
+
+AC_DEFUN([TORRENT_DISABLE_PTHREAD_SETNAME_NP], [
+  AC_MSG_CHECKING([for pthread_setname_no])
+
+  AC_ARG_ENABLE(pthread-setname-np,
+    AC_HELP_STRING([--disable-pthread-setname-np], [disable pthread_setname_np]),
+    [
+      if test "$enableval" = "no"; then
+        AC_MSG_RESULT(disabled)
+      else
+        AC_MSG_RESULT(checking)
+        TORRENT_CHECK_PTHREAD_SETNAME_NP
+      fi
+    ], [
+      TORRENT_CHECK_PTHREAD_SETNAME_NP
+    ]
+  )
 ])

@@ -49,11 +49,12 @@
 #ifndef RTORRENT_CORE_VIEW_DOWNLOADS_H
 #define RTORRENT_CORE_VIEW_DOWNLOADS_H
 
+#include <functional>
 #include <string>
 #include <vector>
+
 #include <rak/timer.h>
 #include <torrent/object.h>
-#include <tr1/functional>
 
 #include "globals.h"
 
@@ -64,7 +65,7 @@ class Download;
 class View : private std::vector<Download*> {
 public:
   typedef std::vector<Download*>      base_type;
-  typedef std::tr1::function<void ()> slot_void;
+  typedef std::function<void ()> slot_void;
   typedef std::list<slot_void>        signal_void;
 
   using base_type::iterator;
@@ -120,10 +121,13 @@ public:
 
   // Need to explicity trigger filtering.
   void                filter();
+  void                filter_by(const torrent::Object& condition, base_type& result);
   void                filter_download(core::Download* download);
 
   const torrent::Object& get_filter() const { return m_filter; }
-  void                set_filter(const torrent::Object& s)        { m_filter = s; }
+  void                set_filter(const torrent::Object& s) { m_filter = s; }
+  const torrent::Object& get_filter_temp() const { return m_temp_filter; }
+  void                set_filter_temp(const torrent::Object& s) { m_temp_filter = s; }
   void                set_filter_on_event(const std::string& event);
 
   void                clear_filter_on();
@@ -172,6 +176,7 @@ private:
   torrent::Object     m_sortCurrent;
 
   torrent::Object     m_filter;
+  torrent::Object     m_temp_filter; // Temporary view filter (eg: name based filter)
 
   torrent::Object     m_event_added;
   torrent::Object     m_event_removed;

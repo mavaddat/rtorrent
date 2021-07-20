@@ -63,6 +63,7 @@
 #include "download.h"
 #include "download_list.h"
 #include "download_store.h"
+#include "ui/root.h"
 
 #define DL_TRIGGER_EVENT(download, event_name) \
   rpc::commands.call_catch(event_name, rpc::make_target(download), torrent::Object(), "Event '" event_name "' failed: ");
@@ -93,6 +94,7 @@ DownloadList::session_save() {
     lt_log_print(torrent::LOG_ERROR, "Failed to save session torrents.");
 
   control->dht_manager()->save_dht_cache();
+  control->ui()->save_input_history();
 }
 
 DownloadList::iterator
@@ -180,8 +182,8 @@ DownloadList::insert(Download* download) {
   lt_log_print_info(torrent::LOG_TORRENT_INFO, download->info(), "download_list", "Inserting download.");
 
   try {
-    (*itr)->data()->slot_initial_hash()        = tr1::bind(&DownloadList::hash_done, this, download);
-    (*itr)->data()->slot_download_done()       = tr1::bind(&DownloadList::received_finished, this, download);
+    (*itr)->data()->slot_initial_hash()        = std::bind(&DownloadList::hash_done, this, download);
+    (*itr)->data()->slot_download_done()       = std::bind(&DownloadList::received_finished, this, download);
 
     // This needs to be separated into two different calls to ensure
     // the download remains in the view.

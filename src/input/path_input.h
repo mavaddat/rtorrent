@@ -37,8 +37,8 @@
 #ifndef RTORRENT_INPUT_PATH_INPUT_H
 #define RTORRENT_INPUT_PATH_INPUT_H
 
+#include <functional>
 #include <list>
-#include <tr1/functional>
 
 #include "utils/directory.h"
 #include "text_input.h"
@@ -50,8 +50,8 @@ public:
   typedef utils::Directory::iterator              directory_itr;
   typedef std::pair<directory_itr, directory_itr> range_type;
 
-  typedef std::tr1::function<void ()>                             slot_void;
-  typedef std::tr1::function<void (directory_itr, directory_itr)> slot_itr_itr;
+  typedef std::function<void ()>                             slot_void;
+  typedef std::function<void (directory_itr, directory_itr)> slot_itr_itr;
   typedef std::list<slot_void>                                    signal_void;
   typedef std::list<slot_itr_itr>                                 signal_itr_itr;
 

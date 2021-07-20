@@ -37,8 +37,9 @@
 #ifndef RTORRENT_UI_ROOT_H
 #define RTORRENT_UI_ROOT_H
 
-#include <inttypes.h>
+#include <cstdint>
 #include "input/bindings.h"
+#include "download_list.h"
 
 class Control;
 
@@ -58,12 +59,18 @@ namespace ui {
 
 class DownloadList;
 
+typedef std::vector<std::string> ThrottleNameList;
+
 class Root {
 public:
   typedef display::WindowTitle     WTitle;
   typedef display::WindowHttpQueue WHttpQueue;
   typedef display::WindowInput     WInput;
   typedef display::WindowStatusbar WStatusbar;
+
+  typedef std::map<int, int> InputHistoryPointers;
+  typedef std::vector<std::string> InputHistoryCategory;
+  typedef std::map<int, InputHistoryCategory> InputHistory;
 
   Root();
 
@@ -88,10 +95,24 @@ public:
 
   const char*         get_throttle_keys();
 
-  void                enable_input(const std::string& title, input::TextInput* input);
+  ThrottleNameList&   get_status_throttle_up_names()          { return m_throttle_up_names; }
+  ThrottleNameList&   get_status_throttle_down_names()        { return m_throttle_down_names; }
+
+  void                set_status_throttle_up_names(const ThrottleNameList& throttle_list)      { m_throttle_up_names = throttle_list; }
+  void                set_status_throttle_down_names(const ThrottleNameList& throttle_list)    { m_throttle_down_names = throttle_list; }
+
+  void                enable_input(const std::string& title, input::TextInput* input, ui::DownloadList::Input type);
   void                disable_input();
 
   input::TextInput*   current_input();
+
+  int                 get_input_history_size()                { return m_input_history_length; }
+  void                set_input_history_size(int size);
+  void                add_to_input_history(ui::DownloadList::Input type, std::string item);
+
+  void                load_input_history();
+  void                save_input_history();
+  void                clear_input_history();
 
 private:
   void                setup_keys();
@@ -105,6 +126,20 @@ private:
   WStatusbar*         m_windowStatusbar;
 
   input::Bindings     m_bindings;
+
+  int                   m_input_history_length;
+  std::string           m_input_history_last_input;
+  int                   m_input_history_pointer_get;
+  InputHistory          m_input_history;
+  InputHistoryPointers  m_input_history_pointers;
+
+  void                prev_in_input_history(ui::DownloadList::Input type);
+  void                next_in_input_history(ui::DownloadList::Input type);
+
+  void                reset_input_history_attributes(ui::DownloadList::Input type);
+
+  ThrottleNameList    m_throttle_up_names;
+  ThrottleNameList    m_throttle_down_names;
 };
 
 }

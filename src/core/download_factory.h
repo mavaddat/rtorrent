@@ -41,10 +41,11 @@
 #ifndef RTORRENT_CORE_DOWNLOAD_FACTORY_H
 #define RTORRENT_CORE_DOWNLOAD_FACTORY_H
 
+#include <functional>
 #include <iosfwd>
+
 #include <rak/priority_queue_default.h>
 #include <torrent/object.h>
-#include <tr1/functional>
 
 #include "http_queue.h"
 
@@ -54,7 +55,7 @@ class Manager;
 
 class DownloadFactory {
 public:
-  typedef std::tr1::function<void ()> slot_void;
+  typedef std::function<void ()> slot_void;
   typedef std::vector<std::string> command_list_type;
 
   // Do not destroy this object while it is in a HttpQueue.

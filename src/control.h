@@ -37,7 +37,7 @@
 #ifndef RTORRENT_CONTROL_H
 #define RTORRENT_CONTROL_H
 
-#include <inttypes.h>
+#include <cinttypes>
 #include <sys/types.h>
 #include <rak/timer.h>
 #include <rak/priority_queue_default.h>
@@ -66,6 +66,10 @@ namespace rpc {
   class CommandScheduler;
   class XmlRpc;
   class object_storage;
+}
+
+namespace torrent {
+  class directory_events;
 }
 
 class Control {
@@ -98,6 +102,8 @@ public:
   rpc::CommandScheduler* command_scheduler()        { return m_commandScheduler; }
   rpc::object_storage*   object_storage()           { return m_objectStorage; }
 
+  torrent::directory_events* directory_events()     { return m_directory_events; }
+
   uint64_t            tick() const                  { return m_tick; }
   void                inc_tick()                    { m_tick++; }
 
@@ -117,8 +123,9 @@ private:
   input::Manager*     m_input;
   input::InputEvent*  m_inputStdin;
 
-  rpc::CommandScheduler* m_commandScheduler;
-  rpc::object_storage*   m_objectStorage;
+  rpc::CommandScheduler*     m_commandScheduler;
+  rpc::object_storage*       m_objectStorage;
+  torrent::directory_events* m_directory_events;
 
   uint64_t            m_tick;
 

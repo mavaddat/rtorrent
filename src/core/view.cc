@@ -89,17 +89,21 @@ struct view_downloads_compare : std::binary_function<Download*, Download*, bool>
 };
 
 struct view_downloads_filter : std::unary_function<Download*, bool> {
-  view_downloads_filter(const torrent::Object& cmd) : m_command(cmd) {}
+  view_downloads_filter(const torrent::Object& cmd, const torrent::Object& cmd2) : m_command(cmd), m_command2(cmd2) {}
 
   bool operator () (Download* d1) const {
-    if (m_command.is_empty())
+    return this->evalCmd(m_command, d1) && this->evalCmd(m_command2, d1);
+  }
+
+  bool evalCmd(const torrent::Object& cmd, Download* d1) const {
+    if (cmd.is_empty())
       return true;
 
     try {
       torrent::Object result;
 
-      if (m_command.is_dict_key()) {
-        // torrent::Object tmp_command = m_command;
+      if (cmd.is_dict_key()) {
+        // torrent::Object tmp_command = cmd;
 
         // uint32_t flags = tmp_command.flags() & torrent::Object::mask_function;
         // tmp_command.unset_flags(torrent::Object::mask_function);
@@ -109,10 +113,10 @@ struct view_downloads_filter : std::unary_function<Download*, bool> {
         // result = rpc::commands.call_command(tmp_command.as_dict_key().c_str(), tmp_command.as_dict_obj(),
         //                                     rpc::make_target(d1));
 
-        result = rpc::commands.call_command(m_command.as_dict_key().c_str(), m_command.as_dict_obj(), rpc::make_target(d1));
+        result = rpc::commands.call_command(cmd.as_dict_key().c_str(), cmd.as_dict_obj(), rpc::make_target(d1));
 
       } else {
-        result = rpc::parse_command_single(rpc::make_target(d1), m_command.as_string());
+        result = rpc::parse_command_single(rpc::make_target(d1), cmd.as_string());
       }
 
       switch (result.type()) {
@@ -136,6 +140,7 @@ struct view_downloads_filter : std::unary_function<Download*, bool> {
   }
 
   const torrent::Object&       m_command;
+  const torrent::Object&       m_command2;
 };
 
 void
@@ -177,7 +182,7 @@ View::initialize(const std::string& name) {
   m_focus = 0;
 
   set_last_changed(rak::timer());
-  m_delayChanged.slot() = std::tr1::bind(&View::emit_changed_now, this);
+  m_delayChanged.slot() = std::bind(&View::emit_changed_now, this);
 }
 
 void
@@ -257,9 +262,13 @@ View::sort() {
 
 void
 View::filter() {
+  // Do NOT allow filter STARTED and STOPPED views: they are special
+  if (m_name == "started" || m_name == "stopped")
+    return;
+
   // Parition the list in two steps so we know which elements changed.
-  iterator splitVisible  = std::stable_partition(begin_visible(),  end_visible(),  view_downloads_filter(m_filter));
-  iterator splitFiltered = std::stable_partition(begin_filtered(), end_filtered(), view_downloads_filter(m_filter));
+  iterator splitVisible  = std::stable_partition(begin_visible(),  end_visible(),  view_downloads_filter(m_filter, m_temp_filter));
+  iterator splitFiltered = std::stable_partition(begin_filtered(), end_filtered(), view_downloads_filter(m_filter, m_temp_filter));
 
   base_type changed(splitVisible, splitFiltered);
   iterator splitChanged = changed.begin() + std::distance(splitVisible, end_visible());
@@ -282,13 +291,23 @@ View::filter() {
   // perhaps always clear them, thus not throwing anything.
   if (!m_event_removed.is_empty())
     std::for_each(changed.begin(), splitChanged,
-                  tr1::bind(&rpc::call_object_d_nothrow, m_event_removed, tr1::placeholders::_1));
+                  std::bind(&rpc::call_object_d_nothrow, m_event_removed, std::placeholders::_1));
 
   if (!m_event_added.is_empty())
     std::for_each(changed.begin(), splitChanged,
-                  tr1::bind(&rpc::call_object_d_nothrow, m_event_added, tr1::placeholders::_1));
+                  std::bind(&rpc::call_object_d_nothrow, m_event_added, std::placeholders::_1));
 
   emit_changed();
+}
+
+void
+View::filter_by(const torrent::Object& condition, View::base_type& result) {
+  // std::copy_if(begin_visible(), end_visible(), result.begin(), view_downloads_filter(condition));
+  view_downloads_filter matches = view_downloads_filter(condition, m_temp_filter);
+
+  for (iterator itr = begin_visible(); itr != end_visible(); ++itr)
+    if (matches(*itr))
+      result.push_back(*itr);
 }
 
 void
@@ -298,8 +317,7 @@ View::filter_download(core::Download* download) {
   if (itr == base_type::end())
     throw torrent::internal_error("View::filter_download(...) could not find download.");
 
-  if (view_downloads_filter(m_filter)(download)) {
-      
+  if (view_downloads_filter(m_filter, m_temp_filter)(download)) {
     if (itr >= end_visible()) {
       erase_internal(itr);
       insert_visible(download);

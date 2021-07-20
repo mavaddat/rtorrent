@@ -37,9 +37,9 @@
 #ifndef RTORRENT_CORE_HTTP_QUEUE_H
 #define RTORRENT_CORE_HTTP_QUEUE_H
 
-#include <list>
+#include <functional>
 #include <iosfwd>
-#include <tr1/functional>
+#include <list>
 
 namespace core {
 
@@ -48,8 +48,8 @@ class CurlGet;
 class HttpQueue : private std::list<CurlGet*> {
 public:
   typedef std::list<CurlGet*>                 base_type;
-  typedef std::tr1::function<CurlGet* ()>     slot_factory;
-  typedef std::tr1::function<void (CurlGet*)> slot_curl_get;
+  typedef std::function<CurlGet* ()>     slot_factory;
+  typedef std::function<void (CurlGet*)> slot_curl_get;
   typedef std::list<slot_curl_get>            signal_curl_get;
 
   using base_type::iterator;

@@ -36,6 +36,8 @@
 
 #include "config.h"
 
+#include <sstream>
+
 #include <rak/functional.h>
 #include <rak/string_manip.h>
 #include <torrent/exceptions.h>
@@ -124,16 +126,13 @@ DownloadList::set_current_view(const std::string& name) {
   return dynamic_cast<ElementDownloadList*>(m_uiArray[DISPLAY_DOWNLOAD_LIST])->receive_change_view(name);
 }
 
-// This should also do focus_next() or something.
 void
 DownloadList::unfocus_download(core::Download* d) {
-  if (current_view()->focus() >= current_view()->end_visible() || *current_view()->focus() != d)
-    return;
-
-  if (m_state == DISPLAY_DOWNLOAD)
+  if (m_state == DISPLAY_DOWNLOAD && d == static_cast<Download*>(m_uiArray[DISPLAY_DOWNLOAD])->download())
     activate_display(DISPLAY_DOWNLOAD_LIST);
 
-  current_view()->next_focus();
+  if (*current_view()->focus() == d && current_view()->focus() < current_view()->end_visible())
+      current_view()->next_focus();
 }
 
 void
@@ -191,7 +190,7 @@ DownloadList::activate_display(Display displayType) {
       Download* download = new Download(*current_view()->focus());
 
       download->activate(m_frame);
-      download->slot_exit(std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST));
+      download->slot_exit(std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST));
     
       m_uiArray[DISPLAY_DOWNLOAD] = download;
       break;
@@ -262,35 +261,64 @@ DownloadList::receive_view_input(Input type) {
     title = "command";
     break;
 
+  case INPUT_FILTER:
+    {
+      // Do not allow to subfilter the defined excluded views
+      const std::string excluded_views = rpc::call_command_string("view.filter.temp.excluded");
+      std::stringstream ss(excluded_views);
+      std::string view_name_var;
+
+      while(ss.good()) {
+          std::getline(ss, view_name_var, ',');
+          if (current_view()->name() == rak::trim(view_name_var)) {
+              control->core()->push_log_std("View '" + current_view()->name() + "' can't be filtered.");
+              return;
+          }
+      }
+
+      title = "filter";
+    }
+    break;
+
   default:
     throw torrent::internal_error("DownloadList::receive_view_input(...) Invalid input type.");
   }
 
   ElementStringList* esl = dynamic_cast<ElementStringList*>(m_uiArray[DISPLAY_STRING_LIST]);
 
-  input->signal_show_next().push_back(std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
-  input->signal_show_next().push_back(std::tr1::bind(&ElementStringList::next_screen, esl));
+  input->signal_show_next().push_back(std::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
+  input->signal_show_next().push_back(std::bind(&ElementStringList::next_screen, esl));
 
-  input->signal_show_range().push_back(std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
-  input->signal_show_range().push_back(std::tr1::bind(&ElementStringList::set_range_dirent<utils::Directory::iterator>,
+  input->signal_show_range().push_back(std::bind(&DownloadList::activate_display, this, DISPLAY_STRING_LIST));
+  input->signal_show_range().push_back(std::bind(&ElementStringList::set_range_dirent<utils::Directory::iterator>,
                                                       esl,
-                                                      std::tr1::placeholders::_1,
-                                                      std::tr1::placeholders::_2));
+                                                      std::placeholders::_1,
+                                                      std::placeholders::_2));
 
-  input->bindings()['\n']      = std::tr1::bind(&DownloadList::receive_exit_input, this, type);
-  input->bindings()[KEY_ENTER] = std::tr1::bind(&DownloadList::receive_exit_input, this, type);
-  input->bindings()['\x07']    = std::tr1::bind(&DownloadList::receive_exit_input, this, INPUT_NONE);
+  // reset ESC delay for input prompt
+  set_escdelay(0);
 
-  control->ui()->enable_input(title, input);
+  input->bindings()['\n']      = std::bind(&DownloadList::receive_exit_input, this, type);
+  input->bindings()[KEY_ENTER] = std::bind(&DownloadList::receive_exit_input, this, type);
+  input->bindings()['\x07']    = std::bind(&DownloadList::receive_exit_input, this, INPUT_NONE); // ^G
+  input->bindings()['\x1B']    = std::bind(&DownloadList::receive_exit_input, this, INPUT_NONE); // ESC , ^[
+
+  control->ui()->enable_input(title, input, type);
 }
 
 void
 DownloadList::receive_exit_input(Input type) {
+  // set back ESC delay to default
+  set_escdelay(1000);
+
   input::TextInput* input = control->ui()->current_input();
   
   // We should check that this object is the one holding the input.
   if (input == NULL)
     return;
+
+  if (type != INPUT_NONE && type != INPUT_EOI)
+    control->ui()->add_to_input_history(type, input->str());
 
   control->ui()->disable_input();
 
@@ -325,6 +353,28 @@ DownloadList::receive_exit_input(Input type) {
                                 input->str());
       break;
 
+    case INPUT_FILTER:
+      if (input->str().empty()) {
+        if (rpc::call_command_value("view.filter.temp.log"))
+          control->core()->push_log_std("Clear temporary filter on '" + current_view()->name() + "' view.");
+        current_view()->set_filter_temp(torrent::Object());
+        current_view()->filter();
+        current_view()->sort();
+      } else {
+        std::string pattern = input->str();
+        if (pattern.back() != '$')
+          pattern = pattern + ".*";
+        if (pattern.front() != '^')
+          pattern = ".*" + pattern;
+        std::transform(pattern.begin(), pattern.end(), pattern.begin(), ::tolower);
+        std::string temp_filter = "match={d.name=," + pattern + "}";
+        if (rpc::call_command_value("view.filter.temp.log"))
+          control->core()->push_log_std("Temporary filter on '" + current_view()->name() + "' view: " + pattern);
+        current_view()->set_filter_temp(temp_filter);
+        current_view()->filter();
+      }
+      break;
+
     default:
       throw torrent::internal_error("DownloadList::receive_exit_input(...) Invalid input type.");
     }
@@ -340,20 +390,21 @@ DownloadList::receive_exit_input(Input type) {
 
 void
 DownloadList::setup_keys() {
-  m_bindings['\x7f']        = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
-  m_bindings[KEY_BACKSPACE] = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
-  m_bindings['\n']          = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
-  m_bindings[KEY_ENTER]     = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
-  m_bindings['\x0F']        = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_CHANGE_DIRECTORY);
-  m_bindings['X' - '@']     = std::tr1::bind(&DownloadList::receive_view_input, this, INPUT_COMMAND);
+  m_bindings['\x7f']        = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
+  m_bindings[KEY_BACKSPACE] = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_DEFAULT);
+  m_bindings['\n']          = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
+  m_bindings[KEY_ENTER]     = std::bind(&DownloadList::receive_view_input, this, INPUT_LOAD_MODIFIED);
+  m_bindings['\x0F']        = std::bind(&DownloadList::receive_view_input, this, INPUT_CHANGE_DIRECTORY);
+  m_bindings['X' - '@']     = std::bind(&DownloadList::receive_view_input, this, INPUT_COMMAND);
+  m_bindings['F']           = std::bind(&DownloadList::receive_view_input, this, INPUT_FILTER);
 
   m_uiArray[DISPLAY_LOG]->bindings()[KEY_LEFT] =
     m_uiArray[DISPLAY_LOG]->bindings()['B' - '@'] =
-    m_uiArray[DISPLAY_LOG]->bindings()[' '] = std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST);
+    m_uiArray[DISPLAY_LOG]->bindings()[' '] = std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD_LIST);
 
   m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()[KEY_RIGHT] =
-    m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['F' - '@'] = std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD);
-  m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['l'] = std::tr1::bind(&DownloadList::activate_display, this, DISPLAY_LOG);
+    m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['F' - '@'] = std::bind(&DownloadList::activate_display, this, DISPLAY_DOWNLOAD);
+  m_uiArray[DISPLAY_DOWNLOAD_LIST]->bindings()['l'] = std::bind(&DownloadList::activate_display, this, DISPLAY_LOG);
 }
 
 }

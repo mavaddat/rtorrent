@@ -1,7 +1,7 @@
 BUILDING
 
  Run "./autogen.sh" to generate the configure scripts if
-nessesary. The man page "doc/rtorrent.1" must be generated with
+necessary. The man page "doc/rtorrent.1" must be generated with
 "docbook2man rtorrent.1.xml" if it is missing.
 
  Note that rtorrent follows the development of libtorrent closely, and
@@ -32,5 +32,10 @@ DEPENDENCIES
 
 CONTACT
 
- Send bug reports, suggestions and patches to <jaris@ifi.uio.no> or
-to the mailinglist.
+ Jari Sundell
+
+ Skomakerveien 33
+ 3185 Skoppum, NORWAY
+
+ Send bug reports, suggestions and patches to
+<sundell.software@gmail.com> or to the mailinglist.

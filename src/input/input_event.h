@@ -37,15 +37,16 @@
 #ifndef RTORRENT_INPUT_INPUT_EVENT_H
 #define RTORRENT_INPUT_INPUT_EVENT_H
 
+#include <functional>
+
 #include <torrent/event.h>
 #include <torrent/poll.h>
-#include <tr1/functional>
 
 namespace input {
 
 class InputEvent : public torrent::Event {
 public:
-  typedef std::tr1::function<void (int)> slot_int;
+  typedef std::function<void (int)> slot_int;
 
   InputEvent(int fd) { m_fileDesc = fd; }
 

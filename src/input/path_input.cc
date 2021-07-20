@@ -41,15 +41,10 @@
 #include <rak/functional.h>
 #include <rak/path.h>
 
+#include <dirent.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <torrent/utils/log.h>
-
-#ifdef __sun__
-  #include <dirent.h>
-  #include <sys/stat.h>
-#else
-  #include <sys/dir.h>
-#endif
 
 #include "path_input.h"
 

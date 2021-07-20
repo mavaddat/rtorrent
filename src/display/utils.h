@@ -66,8 +66,12 @@ char*       print_ddhhmm(char* first, char* last, time_t t);
 char*       print_ddmmyyyy(char* first, char* last, time_t t);
 
 char*       print_download_title(char* first, char* last, core::Download* d);
-char*       print_download_info(char* first, char* last, core::Download* d);
+char*       print_download_info_full(char* first, char* last, core::Download* d);
 char*       print_download_status(char* first, char* last, core::Download* d);
+
+char*       print_download_column_compact(char* first, char* last);
+char*       print_download_info_compact(char* first, char* last, core::Download* d);
+
 char*       print_download_time_left(char* first, char* last, core::Download* d);
 char*       print_download_percentage_done(char* first, char* last, core::Download* d);
 
@@ -75,6 +79,9 @@ char*       print_client_version(char* first, char* last, const torrent::ClientI
 
 char*       print_entry_tags(char* first, char* last);
 char*       print_entry_file(char* first, char* last, const torrent::Entry& entry);
+
+char*       print_status_throttle_limit(char* first, char* last, bool up, const std::vector<std::string>& throttle_names);
+char*       print_status_throttle_rate(char* first, char* last, bool up, const std::vector<std::string>& throttle_names, const double& global_rate);
 
 char*       print_status_info(char* first, char* last);
 char*       print_status_extra(char* first, char* last);
